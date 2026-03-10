@@ -16,13 +16,13 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/jonnyholland/ComposableArchitecturePattern.git", from: "1.4.0"),
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.24.0"),
     ],
     targets: [
         .target(
             name: "TensorPool",
             dependencies: [
-                .product(name: "CAP", package: "ComposableArchitecturePattern"),
+                .product(name: "AsyncHTTPClient", package: "async-http-client", condition: .when(platforms: [.linux])),
             ]
         ),
         .testTarget(

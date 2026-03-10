@@ -6,26 +6,27 @@
 //
 
 import Foundation
+
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
 
-/// The default implementation of ``TensorPoolService`` using URLSession.
+/// The default implementation of ``TensorPoolService`` using the platform-appropriate HTTP client.
 public struct DefaultTensorPoolService: TensorPoolService {
     private let apiToken: String
     private let basePath: String
-    private let session: URLSession
+    private let httpClient: TPHTTPClient
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
     public init(
         apiToken: String,
         basePath: String = TensorPool.baseURL,
-        session: URLSession = .shared
+        httpClient: TPHTTPClient? = nil
     ) {
         self.apiToken = apiToken
         self.basePath = basePath
-        self.session = session
+        self.httpClient = httpClient ?? TPHTTPClientFactory.createDefault()
 
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -215,36 +216,33 @@ public struct DefaultTensorPoolService: TensorPoolService {
         endpoint: TensorPool.API,
         body: Data? = nil,
         queryItems: [URLQueryItem] = []
-    ) async throws(TensorPool.APIError) -> (Data, HTTPURLResponse) {
+    ) async throws(TensorPool.APIError) -> (Data, TPHTTPResponse) {
         guard let url = endpoint.url(base: basePath, queryItems: queryItems) else {
             throw .requestFailed(description: "Invalid URL: \(basePath)\(endpoint.path)")
         }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
-        request.setValue("Bearer \(apiToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.httpBody = body
+        let headers: [String: String] = [
+            "Authorization": "Bearer \(apiToken)",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        ]
+
+        let request = TPHTTPRequest(url: url, method: method.rawValue, headers: headers, body: body)
 
         let data: Data
-        let response: URLResponse
+        let response: TPHTTPResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await httpClient.data(for: request)
         } catch {
             throw .requestFailed(description: error.localizedDescription)
         }
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw .requestFailed(description: "Invalid response type")
-        }
-
-        try validateResponse(httpResponse, data: data)
-        return (data, httpResponse)
+        try validateResponse(statusCode: response.statusCode, data: data)
+        return (data, response)
     }
 
-    private func validateResponse(_ response: HTTPURLResponse, data: Data) throws(TensorPool.APIError) {
-        switch response.statusCode {
+    private func validateResponse(statusCode: Int, data: Data) throws(TensorPool.APIError) {
+        switch statusCode {
         case 200...299:
             return
         case 401:
@@ -268,7 +266,7 @@ public struct DefaultTensorPoolService: TensorPoolService {
             let message = (try? decoder.decode(TensorPool.ErrorResponse.self, from: data))?.detail
                 ?? (try? decoder.decode(TensorPool.ErrorResponse.self, from: data))?.message
                 ?? "Unknown error"
-            throw .responseUnsuccessful(statusCode: response.statusCode, message: message)
+            throw .responseUnsuccessful(statusCode: statusCode, message: message)
         }
     }
 
