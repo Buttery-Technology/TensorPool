@@ -15,17 +15,17 @@ extension TensorPool {
         /// - Parameters:
         ///   - apiToken: The API token from the [TensorPool Dashboard](https://tensorpool.dev/dashboard/api-key).
         ///   - basePath: The base URL for the API. Defaults to ``TensorPool/baseURL``.
-        ///   - session: The URLSession to use. Defaults to `.shared`.
+        ///   - httpClient: The HTTP client to use. Defaults to a platform-appropriate client.
         /// - Returns: A configured ``TensorPoolService`` instance.
         public static func service(
             apiToken: String,
             basePath: String = TensorPool.baseURL,
-            session: URLSession = .shared
+            httpClient: TPHTTPClient? = nil
         ) -> TensorPoolService {
             DefaultTensorPoolService(
                 apiToken: apiToken,
                 basePath: basePath,
-                session: session
+                httpClient: httpClient
             )
         }
     }
